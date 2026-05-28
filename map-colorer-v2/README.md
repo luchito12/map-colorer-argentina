@@ -53,7 +53,7 @@
 
 **1. Clonar o descargar el repositorio**
 ```bash
-git clone https://github.com/TU_USUARIO/map-colorer-argentina.git
+git clone https://github.com/luchito12/map-colorer-argentina.git
 ```
 O descargar el ZIP desde el botón verde **Code → Download ZIP**.
 
