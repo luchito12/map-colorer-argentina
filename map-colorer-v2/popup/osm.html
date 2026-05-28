@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Map Colorer Argentina — OpenStreetMap</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../assets/lib/leaflet.css">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: 'Segoe UI', Arial, sans-serif; overflow: hidden; }
+#map { width: 100%; height: 100vh; }
+
+#osm-panel {
+  position: fixed; top: 12px; right: 12px; z-index: 1000;
+  width: 248px; background: #fff; border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  overflow: hidden; font-size: 13px; color: #202124; user-select: none;
+  max-height: calc(100vh - 24px); display: flex; flex-direction: column;
+}
+#osm-header {
+  background: #1a6b3c; padding: 9px 12px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: move; font-size: 12px; font-weight: 600; color: #fff;
+}
+#osm-header-btns { display: flex; gap: 4px; }
+.osm-icon-btn {
+  background: rgba(255,255,255,0.2); border: none; border-radius: 4px;
+  color: #fff; width: 20px; height: 20px; cursor: pointer; font-size: 12px;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.osm-icon-btn:hover { background: rgba(255,255,255,.35); }
+
+#osm-body { overflow-y: auto; flex: 1; padding-bottom: 4px; }
+
+.osm-sec { padding: 7px 12px 4px; border-bottom: 1px solid #f1f3f4; }
+.osm-sec:last-child { border-bottom: none; }
+.osm-sec-title {
+  font-size: 10px; font-weight: 600; color: #80868b;
+  letter-spacing: .07em; text-transform: uppercase; margin-bottom: 6px;
+}
+
+.osm-layer-row {
+  display: flex; align-items: center; padding: 3px 0; gap: 7px;
+  transition: background .1s;
+}
+.osm-swatch {
+  width: 14px; height: 14px; border-radius: 3px;
+  border: 1px solid rgba(0,0,0,.12); cursor: pointer; flex-shrink: 0;
+}
+.osm-swatch:hover { transform: scale(1.2); }
+.osm-layer-name { flex: 1; font-size: 11px; color: #3c4043; }
+
+.osm-toggle { position: relative; width: 28px; height: 15px; flex-shrink: 0; }
+.osm-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+.osm-toggle-track {
+  position: absolute; inset: 0; border-radius: 15px;
+  background: #dadce0; cursor: pointer; transition: background .2s;
+}
+.osm-toggle input:checked + .osm-toggle-track { background: #1a6b3c; }
+.osm-toggle-track::after {
+  content: ''; position: absolute; width: 11px; height: 11px; top: 2px; left: 2px;
+  background: #fff; border-radius: 50%; transition: transform .2s; box-shadow: 0 1px 2px rgba(0,0,0,.2);
+}
+.osm-toggle input:checked + .osm-toggle-track::after { transform: translateX(13px); }
+
+.osm-op-row {
+  display: flex; align-items: center; gap: 6px; padding: 1px 0 3px 21px;
+}
+.osm-op-row label { font-size: 9px; color: #80868b; min-width: 30px; }
+.osm-op-row input[type=range] { flex: 1; accent-color: #1a6b3c; cursor: pointer; height: 3px; }
+.osm-op-val { font-size: 9px; color: #5f6368; min-width: 26px; text-align: right; }
+
+.osm-pat-row {
+  display: flex; align-items: center; gap: 6px; padding: 1px 0 4px 21px;
+}
+.osm-pat-row label { font-size: 9px; color: #80868b; min-width: 30px; }
+.pat-sel {
+  flex: 1; font-size: 10px; padding: 2px 4px;
+  border: 1px solid #dadce0; border-radius: 4px;
+  color: #3c4043; background: #fff; cursor: pointer; outline: none;
+}
+
+.osm-select {
+  width: 100%; font-size: 11px; padding: 4px 6px; margin-top: 4px;
+  border: 1px solid #dadce0; border-radius: 5px;
+  color: #3c4043; background: #fff; cursor: pointer; outline: none;
+}
+.osm-select:focus { border-color: #1a6b3c; }
+
+.osm-toggle-row { display: flex; align-items: center; gap: 7px; padding: 4px 0; }
+.osm-toggle-label { flex: 1; font-size: 11px; color: #5f6368; }
+
+.osm-loc-info {
+  margin-top: 5px; font-size: 10px; color: #2e7d32;
+  background: #e8f5e9; border-radius: 4px; padding: 4px 7px; line-height: 1.5;
+}
+
+.osm-divider { height: 1px; background: #f1f3f4; margin: 4px 0; }
+
+.osm-footer { padding: 6px 12px 8px; }
+.osm-btn {
+  width: 100%; padding: 6px 0; font-size: 11px; font-family: inherit;
+  border-radius: 5px; cursor: pointer;
+  border: 1px solid #dadce0; background: #fff; color: #3c4043;
+}
+.osm-btn.primary { background: #1a6b3c; color: #fff; border-color: #1a6b3c; font-weight: 600; }
+
+/* Tooltip Leaflet */
+.mc-tt-wrap { padding: 0 !important; background: transparent !important;
+  border: none !important; box-shadow: none !important; }
+.mc-tt-wrap::before { display: none !important; }
+.mc-tt {
+  background: #fff; border-radius: 9px;
+  box-shadow: 0 3px 14px rgba(0,0,0,.18), 0 1px 4px rgba(0,0,0,.1);
+  padding: 10px 13px; font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 12px; min-width: 160px; max-width: 250px; pointer-events: none;
+}
+.mc-tt .tt-title { font-weight: 700; font-size: 14px; color: #202124; margin-bottom: 2px; }
+.mc-tt .tt-sub {
+  font-size: 10px; color: #1a6b3c; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px;
+}
+.mc-tt .tt-row {
+  display: flex; justify-content: space-between; gap: 10px;
+  padding: 3px 0; border-top: 1px solid #f1f3f4;
+  color: #80868b; font-size: 11px;
+}
+.mc-tt .tt-row span:last-child {
+  font-weight: 500; color: #3c4043; text-align: right;
+  word-break: break-word; white-space: normal; max-width: 150px;
+}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="osm-panel">
+  <div id="osm-header">
+    <span>🗺 Map Colorer — OSM</span>
+    <div id="osm-header-btns">
+      <button class="osm-icon-btn" id="osm-collapse-btn">−</button>
+    </div>
+  </div>
+
+  <div id="osm-body">
+
+    <!-- CAPAS -->
+    <div class="osm-sec">
+      <div class="osm-sec-title">Capas</div>
+
+      <!-- Provincias -->
+      <div class="osm-layer-row">
+        <div class="osm-swatch" id="sw-provincias" style="background:#3399FF" data-layer="provincias"></div>
+        <span class="osm-layer-name">Provincias (24)</span>
+        <label class="osm-toggle"><input type="checkbox" id="tog-provincias" checked data-layer="provincias"><span class="osm-toggle-track"></span></label>
+      </div>
+      <div class="osm-op-row" id="oprow-provincias">
+        <label>Opac.</label>
+        <input type="range" id="op-provincias" min="5" max="80" value="40" data-layer="provincias">
+        <span class="osm-op-val" id="opv-provincias">40%</span>
+      </div>
+      <div class="osm-pat-row" id="patrow-provincias">
+        <label>Patrón</label>
+        <select class="pat-sel" id="pat-provincias" data-layer="provincias">
+          <option value="solid">Sólido</option>
+          <option value="hlines">Líneas H</option>
+          <option value="vlines">Líneas V</option>
+          <option value="diag">Diagonal</option>
+          <option value="diag_inv">Diag. inv.</option>
+          <option value="crosshatch">Cuadriculado</option>
+          <option value="dots">Puntos</option>
+        </select>
+      </div>
+
+      <!-- Municipios -->
+      <div class="osm-layer-row" style="margin-top:4px;">
+        <div class="osm-swatch" id="sw-municipios" style="background:#FF6633" data-layer="municipios"></div>
+        <span class="osm-layer-name">Munic. / Depto.</span>
+        <label class="osm-toggle"><input type="checkbox" id="tog-municipios" data-layer="municipios"><span class="osm-toggle-track"></span></label>
+      </div>
+      <div class="osm-op-row" id="oprow-municipios" style="display:none">
+        <label>Opac.</label>
+        <input type="range" id="op-municipios" min="5" max="80" value="40" data-layer="municipios">
+        <span class="osm-op-val" id="opv-municipios">40%</span>
+      </div>
+      <div class="osm-pat-row" id="patrow-municipios" style="display:none">
+        <label>Patrón</label>
+        <select class="pat-sel" id="pat-municipios" data-layer="municipios">
+          <option value="solid">Sólido</option>
+          <option value="hlines">Líneas H</option>
+          <option value="vlines">Líneas V</option>
+          <option value="diag">Diagonal</option>
+          <option value="diag_inv">Diag. inv.</option>
+          <option value="crosshatch">Cuadriculado</option>
+          <option value="dots">Puntos</option>
+        </select>
+      </div>
+      <div id="prov-sel-wrap" style="display:none;padding:2px 0 4px 21px;">
+        <select id="prov-sel" class="osm-select" style="margin-top:3px;">
+          <option value="">— Todas las provincias —</option>
+        </select>
+      </div>
+
+      <!-- Barrios -->
+      <div class="osm-layer-row" style="margin-top:4px;">
+        <div class="osm-swatch" id="sw-barrios" style="background:#66AA00" data-layer="barrios"></div>
+        <span class="osm-layer-name">Barrios CABA (48)</span>
+        <label class="osm-toggle"><input type="checkbox" id="tog-barrios" data-layer="barrios"><span class="osm-toggle-track"></span></label>
+      </div>
+      <div class="osm-op-row" id="oprow-barrios" style="display:none">
+        <label>Opac.</label>
+        <input type="range" id="op-barrios" min="5" max="80" value="45" data-layer="barrios">
+        <span class="osm-op-val" id="opv-barrios">45%</span>
+      </div>
+      <div class="osm-pat-row" id="patrow-barrios" style="display:none">
+        <label>Patrón</label>
+        <select class="pat-sel" id="pat-barrios" data-layer="barrios">
+          <option value="solid">Sólido</option>
+          <option value="hlines">Líneas H</option>
+          <option value="vlines">Líneas V</option>
+          <option value="diag">Diagonal</option>
+          <option value="diag_inv">Diag. inv.</option>
+          <option value="crosshatch">Cuadriculado</option>
+          <option value="dots">Puntos</option>
+        </select>
+      </div>
+
+      <!-- Regiones -->
+      <div class="osm-layer-row" style="margin-top:4px;">
+        <div class="osm-swatch" id="sw-regiones" style="background:#CC8800" data-layer="regiones"></div>
+        <span class="osm-layer-name">Regiones (5)</span>
+        <label class="osm-toggle"><input type="checkbox" id="tog-regiones" data-layer="regiones"><span class="osm-toggle-track"></span></label>
+      </div>
+      <div class="osm-op-row" id="oprow-regiones" style="display:none">
+        <label>Opac.</label>
+        <input type="range" id="op-regiones" min="5" max="80" value="30" data-layer="regiones">
+        <span class="osm-op-val" id="opv-regiones">30%</span>
+      </div>
+      <div class="osm-pat-row" id="patrow-regiones" style="display:none">
+        <label>Patrón</label>
+        <select class="pat-sel" id="pat-regiones" data-layer="regiones">
+          <option value="solid">Sólido</option>
+          <option value="hlines">Líneas H</option>
+          <option value="vlines">Líneas V</option>
+          <option value="diag">Diagonal</option>
+          <option value="diag_inv">Diag. inv.</option>
+          <option value="crosshatch">Cuadriculado</option>
+          <option value="dots">Puntos</option>
+        </select>
+      </div>
+
+    </div>
+
+    <!-- HIDROGRAFÍA -->
+    <div class="osm-sec">
+      <div class="osm-sec-title">Hidrografía · IGN</div>
+
+      <!-- Ríos y corrientes -->
+      <div class="osm-layer-row" style="margin-top:4px;">
+        <div class="osm-swatch" id="sw-rios" style="background:#1565C0" data-layer="rios"></div>
+        <span class="osm-layer-name">Ríos y corrientes</span>
+        <label class="osm-toggle"><input type="checkbox" id="tog-rios" data-layer="rios"><span class="osm-toggle-track"></span></label>
+      </div>
+      <div class="osm-op-row" id="oprow-rios" style="display:none">
+        <label>Opac.</label>
+        <input type="range" id="op-rios" min="5" max="95" value="60" data-layer="rios">
+        <span class="osm-op-val" id="opv-rios">60%</span>
+      </div>
+      <div class="osm-pat-row" id="patrow-rios" style="display:none">
+        <label>Patrón</label>
+        <select class="pat-sel" id="pat-rios" data-layer="rios">
+          <option value="solid">Sólido</option>
+          <option value="hlines">Líneas H</option>
+          <option value="vlines">Líneas V</option>
+          <option value="diag">Diagonal</option>
+          <option value="diag_inv">Diag. inv.</option>
+          <option value="crosshatch">Cuadriculado</option>
+          <option value="dots">Puntos</option>
+        </select>
+      </div>
+      <!-- Lagos y embalses -->
+      <div class="osm-layer-row" style="margin-top:4px;">
+        <div class="osm-swatch" id="sw-lagos" style="background:#0288D1" data-layer="lagos"></div>
+        <span class="osm-layer-name">Lagos y embalses</span>
+        <label class="osm-toggle"><input type="checkbox" id="tog-lagos" data-layer="lagos"><span class="osm-toggle-track"></span></label>
+      </div>
+      <div class="osm-op-row" id="oprow-lagos" style="display:none">
+        <label>Opac.</label>
+        <input type="range" id="op-lagos" min="5" max="95" value="65" data-layer="lagos">
+        <span class="osm-op-val" id="opv-lagos">65%</span>
+      </div>
+      <div class="osm-pat-row" id="patrow-lagos" style="display:none">
+        <label>Patrón</label>
+        <select class="pat-sel" id="pat-lagos" data-layer="lagos">
+          <option value="solid">Sólido</option>
+          <option value="hlines">Líneas H</option>
+          <option value="vlines">Líneas V</option>
+          <option value="diag">Diagonal</option>
+          <option value="diag_inv">Diag. inv.</option>
+          <option value="crosshatch">Cuadriculado</option>
+          <option value="dots">Puntos</option>
+        </select>
+      </div>
+      <!-- Lagunas -->
+      <div class="osm-layer-row" style="margin-top:4px;">
+        <div class="osm-swatch" id="sw-lagunas" style="background:#29B6F6" data-layer="lagunas"></div>
+        <span class="osm-layer-name">Lagunas (4084)</span>
+        <label class="osm-toggle"><input type="checkbox" id="tog-lagunas" data-layer="lagunas"><span class="osm-toggle-track"></span></label>
+      </div>
+      <div class="osm-op-row" id="oprow-lagunas" style="display:none">
+        <label>Opac.</label>
+        <input type="range" id="op-lagunas" min="5" max="95" value="60" data-layer="lagunas">
+        <span class="osm-op-val" id="opv-lagunas">60%</span>
+      </div>
+      <div class="osm-pat-row" id="patrow-lagunas" style="display:none">
+        <label>Patrón</label>
+        <select class="pat-sel" id="pat-lagunas" data-layer="lagunas">
+          <option value="solid">Sólido</option><option value="hlines">Líneas H</option>
+          <option value="vlines">Líneas V</option><option value="diag">Diagonal</option>
+          <option value="diag_inv">Diag. inv.</option><option value="crosshatch">Cuadriculado</option>
+          <option value="dots">Puntos</option>
+        </select>
+      </div>
+      <!-- Canales -->
+      <div class="osm-layer-row" style="margin-top:4px;">
+        <div class="osm-swatch" id="sw-canales" style="background:#0097A7" data-layer="canales"></div>
+        <span class="osm-layer-name">Canales</span>
+        <label class="osm-toggle"><input type="checkbox" id="tog-canales" data-layer="canales"><span class="osm-toggle-track"></span></label>
+      </div>
+      <div class="osm-op-row" id="oprow-canales" style="display:none">
+        <label>Opac.</label>
+        <input type="range" id="op-canales" min="5" max="95" value="50" data-layer="canales">
+        <span class="osm-op-val" id="opv-canales">50%</span>
+      </div>
+      <div class="osm-pat-row" id="patrow-canales" style="display:none">
+        <label>Patrón</label>
+        <select class="pat-sel" id="pat-canales" data-layer="canales">
+          <option value="solid">Sólido</option>
+          <option value="hlines">Líneas H</option>
+          <option value="vlines">Líneas V</option>
+          <option value="diag">Diagonal</option>
+          <option value="diag_inv">Diag. inv.</option>
+          <option value="crosshatch">Cuadriculado</option>
+          <option value="dots">Puntos</option>
+        </select>
+      </div>
+      <!-- Diques -->
+      <div class="osm-layer-row" style="margin-top:4px;">
+        <div class="osm-swatch" id="sw-diques" style="background:#4527A0" data-layer="diques"></div>
+        <span class="osm-layer-name">Diques</span>
+        <label class="osm-toggle"><input type="checkbox" id="tog-diques" data-layer="diques"><span class="osm-toggle-track"></span></label>
+      </div>
+      <div class="osm-op-row" id="oprow-diques" style="display:none">
+        <label>Opac.</label>
+        <input type="range" id="op-diques" min="5" max="95" value="80" data-layer="diques">
+        <span class="osm-op-val" id="opv-diques">80%</span>
+      </div>
+      <div class="osm-pat-row" id="patrow-diques" style="display:none">
+        <label>Patrón</label>
+        <select class="pat-sel" id="pat-diques" data-layer="diques">
+          <option value="solid">Sólido</option>
+          <option value="hlines">Líneas H</option>
+          <option value="vlines">Líneas V</option>
+          <option value="diag">Diagonal</option>
+          <option value="diag_inv">Diag. inv.</option>
+          <option value="crosshatch">Cuadriculado</option>
+          <option value="dots">Puntos</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- LOCALIDADES -->
+    <div class="osm-sec">
+      <div class="osm-sec-title">Localidades</div>
+      <select id="loc-prov-sel" class="osm-select">
+        <option value="">— Seleccioná provincia —</option>
+      </select>
+      <select id="loc-dept-sel" class="osm-select" style="display:none;margin-top:5px;">
+        <option value="">— Seleccioná departamento —</option>
+      </select>
+      <div id="loc-info" class="osm-loc-info" style="display:none;"></div>
+    </div>
+
+    <!-- OPCIONES -->
+    <div class="osm-sec">
+      <div class="osm-sec-title">Opciones</div>
+      <div class="osm-toggle-row">
+        <label class="osm-toggle"><input type="checkbox" id="tog-fourcolors"><span class="osm-toggle-track"></span></label>
+        <span class="osm-toggle-label">Auto 4 colores</span>
+      </div>
+    </div>
+
+    <div class="osm-footer">
+      <button class="osm-btn primary" id="btn-reset-view" style="margin-bottom:5px;">Centrar en Argentina</button>
+      <button class="osm-btn" id="btn-geovisor" style="background:#e8f0fe;color:#1a73e8;border-color:#e8f0fe;">
+        Ver en GeoVisor IGN ↗
+      </button>
+    </div>
+
+  </div><!-- #osm-body -->
+</div><!-- #osm-panel -->
+
+<script src="../assets/lib/leaflet.js"></script>
+<script src="osm.js"></script>
+</body>
+</html>

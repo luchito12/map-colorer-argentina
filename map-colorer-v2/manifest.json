@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "Map Colorer Argentina",
+  "version": "1.1.0",
+  "description": "Superposición educativa de capas geográficas sobre mapas. Provincias, municipios, barrios y regiones de Argentina.",
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Map Colorer Argentina"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://*.google.com/maps*",
+    "*://www.google.com/maps*",
+    "*://maps.google.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.google.com/maps*",
+        "*://maps.google.com/*"
+      ],
+      "js": [
+        "src/content.js"
+      ],
+      "css": [
+        "src/overlay.css"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "assets/geo/*.geojson",
+        "assets/geo/*.json",
+        "assets/geo/municipios/*.geojson",
+        "assets/lib/*",
+        "assets/lib/images/*",
+        "popup/osm.html",
+        "popup/osm.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  }
+}
